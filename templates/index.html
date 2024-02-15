@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pencarian Rumah Sakit</title>
+</head>
+<body>
+    <h1>Cari Rumah Sakit</h1>
+    <form method="post">
+        <input type="text" name="query" placeholder="Cari rumah sakit..." value="{{ query }}">
+        <button type="submit">Cari</button>
+    </form>
+    
+    {% if results %}
+        <h2>Hasil:</h2>
+        <ul>
+            {% for result in results %}
+                <li>
+                    <b>{{ result.nama_rumah_sakit }}</b> <br> 
+                    Jenis Rumah Sakit: {{ result.jenis_rumah_sakit }} <br>
+                    Alamat: {{result.alamat_rumah_sakit}} <br>
+                    Kelurahan: {{result.kelurahan}} <br>
+                    Kecamatan: {{result.kecamatan}} <br>
+                    Wilayah: {{result.kota_administrasi}} <br>
+                    Kode Pos: {{result.kode_pos}} <br>
+                    Nomor Telepon: {{result.nomor_telepon}} <br>
+                    Nomor Fax: {{result.nomor_fax}} <br>
+                    Web: {{result.website}} <br>
+                    Email: {{result.email}} <br>
+                    Telepon Humas: {{result.telepon_humas}} <br>
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</body>
+</html>
