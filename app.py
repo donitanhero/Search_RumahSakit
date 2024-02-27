@@ -9,6 +9,26 @@ import numpy as np
 
 app = Flask(__name__)
 
+
+test_data ={
+    "rumah sakit jakarta utara": [],
+    "rumah sakit jakarta selatan": [],
+    "rumah sakit jakarta barat": [],
+    "rumah sakit jakarta pusat": [],
+    "rumah sakit jakarta timur": [],
+    "rumah sakit Cipete utara": ["Brawijaya"],
+    "rumah sakit jakar utar": [],
+    "rumah sakit jaka sel": [],
+    "rumah sakit sekar": ["Sekar"],
+    "rumah sakit Gdeong": ["Bina Waluya", "Tk.IV Cijantung Kesdam Jaya", "Pasar Rebo"],
+    "rumah sakit Caw": ["Universitas Kristen Indonesia", "Budhi Asih "],
+    "rumah sakit cik": ["PGI Cikini"],
+    "tugu": ["Pelabuhan Jakarta", "Mulyasari"],
+    "rumah sakit ibu dan anak jakarta utara": ["Family", "Grand Family", "Hermina Podomoro"],
+    "rumah sakit bersalin jakarta selatan": ["Sofa Marwa", "Asih", "Panti Nugeraha", "Kartini", "Duren Tiga", "Avisena"]
+
+}
+
 # Konfigurasi database MySQL
 db_config = {
     'user': 'root',
@@ -18,27 +38,16 @@ db_config = {
     'port': '80'
 }
 
-# Definisikan frasa yang ingin dijadikan satu token
-multi_word_expressions = [
-    ('jakarta', 'utara'),
-    ('jakarta', 'selatan'),
-    ('jakarta', 'barat'),
-    ('jakarta', 'timur'),
-    ('jakarta', 'pusat')
-]
-
 #multi_word_expressions = []
-
+_namaRumahSakit =[]
 _jenistRumahSakit = []
 _kelurahan = []
 _kecamatan =[]
 _kotaAdministrasi = []
 
-
-'''allowed_keywords = [
-    'jakarta', 'selatan', 'timur', 'barat', 'pusat', 'utara',
-    'Bandung', 'Surabaya', 'Cilandak Barat', 'Kebon Jeruk', 'Cengkareng', 'Grogol', 'sakit'
-]'''
+tp = 0
+fn = 0
+fp = 0
 
 allowed_keywords = []
 
@@ -67,7 +76,29 @@ def load_data_from_mysql():
         # Menggabungkan kolom relevan untuk pencarian
         df['search_data'] = df.apply(lambda row: f"{row['kode_rumah_sakit']} {row['nama_rumah_sakit']} {row['jenis_rumah_sakit']} {row['alamat_rumah_sakit']} {row['kelurahan']} {row['kecamatan']} {row['kota_administrasi']} {row['kode_pos']} {row['nomor_telepon']} {row['nomor_fax']} {row['website']} {row['email']} {row['telepon_humas']} {row['website']}", axis=1)
 
+        for item in df.to_dict('records'):
+            if(item['kota_administrasi'] == "Jakarta Utara"):
+                test_data["rumah sakit jakarta utara"].append(item['nama_rumah_sakit'])
+                test_data["rumah sakit jakar utar"].append(item['nama_rumah_sakit'])
+            elif(item['kota_administrasi'] == "Jakarta Selatan"):
+                test_data["rumah sakit jakarta selatan"].append(item['nama_rumah_sakit'])
+                test_data["rumah sakit jaka sel"].append(item['nama_rumah_sakit'])
+            elif(item['kota_administrasi'] == "Jakarta Barat"):
+                test_data["rumah sakit jakarta barat"].append(item['nama_rumah_sakit'])
+            elif(item['kota_administrasi'] == "Jakarta Pusat"):
+                test_data["rumah sakit jakarta pusat"].append(item['nama_rumah_sakit'])
+            elif(item['kota_administrasi'] == "Jakarta Timur"):
+                test_data["rumah sakit jakarta timur"].append(item['nama_rumah_sakit'])
+        
+    
         allowedWordList = []
+
+        cursor.execute("SELECT DISTINCT nama_rumah_sakit FROM `data_rumah_sakit_di_dki_jakarta` WHERE nama_rumah_sakit != '-'")
+        rows = cursor.fetchall()
+
+        _namaRumahSakit  = set(pd.DataFrame(rows)['nama_rumah_sakit'].tolist()) 
+        allowedWordList.append([word.lower() for string in _namaRumahSakit for word in string.split()])
+        allowedWordList.append(pd.DataFrame(rows)['nama_rumah_sakit'].str.lower().tolist())
 
         cursor.execute("SELECT DISTINCT jenis_rumah_sakit FROM `data_rumah_sakit_di_dki_jakarta` WHERE jenis_rumah_sakit != '-'")
         rows = cursor.fetchall()
@@ -120,20 +151,25 @@ def load_data_from_mysql():
         if conn.is_connected():
             cursor.close()
             conn.close()
-
 # Inisialisasi dan fit TF-IDF Vectorizer
 df, _kotaAdministrasi, _kelurahan, _kecamatan, allowed_keywords, _jenistRumahSakit = load_data_from_mysql()
+
 if not df.empty:
     tfidf_vectorizer = TfidfVectorizer()
     tfidf_matrix = tfidf_vectorizer.fit_transform(df['search_data'])
 
-#tokenizer = MWETokenizer(multi_word_expressions, separator=' ')
 kota_tokenizer = MWETokenizer(_kotaAdministrasi, separator=' ')
-#kelurahan_tokenizer = MWETokenizer(_kelurahan, separator=' ')
-#kecamatan_tokenizer = MWETokenizer(_kecamatan, separator=' ')
-
-
-
+def Evaluation(query, expected, result):
+    global tp 
+    global fn
+    global fp 
+    for item in result:
+        if(item in expected):
+            tp +=1
+            expected.remove(item)
+        else:
+            fp +=1
+    fn += len(expected)
 def correct_typos(query, allowed, limit=1):
     corrected_query = []
     for word in query.split():
@@ -150,35 +186,59 @@ def correct_typos(query, allowed, limit=1):
 @app.route('/', methods=['GET', 'POST'])
 def search():
     results = []
+    keylist = list(test_data.keys())
+    for item in keylist:
+        Evaluation(item, test_data[item], GetResults(item, True))
+    precision = GetPrecision()
+    recall = GetRecall()
+
     if request.method == 'POST' and not df.empty:
         original_query = request.form['query']
         corrected_query = correct_typos(original_query, allowed_keywords)  # Koreksi typo
+        results = GetResults(corrected_query, False);
+
+        return render_template('index.html', results=results.to_dict('records'), query=original_query, corrected_query=corrected_query, precision = precision, recall = recall)
+    return render_template('index.html', results=None, precision = precision, recall = recall)
+
+def GetResults(corrected_query, isEvaluating):
+    kota_tokens = kota_tokenizer.tokenize(corrected_query.split())  # Gunakan query yang sudah dikoreksi
         
-        kota_tokens = kota_tokenizer.tokenize(corrected_query.split())  # Gunakan query yang sudah dikoreksi
-  
-        kota = [token for token in kota_tokens if token.lower() in [keyword.lower() for keyword in [' '.join(tup) for tup in _kotaAdministrasi]]]
+        
+    kota = [token for token in kota_tokens if token.lower() in [keyword.lower() for keyword in [' '.join(tup) for tup in _kotaAdministrasi]]]
+
+
+    query_vector = tfidf_vectorizer.transform([corrected_query])  # Gunakan query yang sudah dikoreksi
+    similarities = cosine_similarity(query_vector, tfidf_matrix).flatten()
+    top_indices = similarities.argsort()[::-1]
+        
+    filtered_indices = [i for i in top_indices if similarities[i] > 0.1]
 
         
 
-        query_vector = tfidf_vectorizer.transform([corrected_query])  # Gunakan query yang sudah dikoreksi
-        similarities = cosine_similarity(query_vector, tfidf_matrix).flatten()
-        top_indices = similarities.argsort()[::-1]
-        
-        filtered_indices = [i for i in top_indices if similarities[i] > 0.1]
-
-        
-
-        if kota:
-            results = df.iloc[filtered_indices][df['kota_administrasi'].str.contains('|'.join(kota), case=False, na=False)]
-        else:
-            results = df.iloc[filtered_indices]
+    if kota:
+        finalresults = df.iloc[filtered_indices][df['kota_administrasi'].str.contains('|'.join(kota), case=False, na=False)]
+    else:
+        finalresults = df.iloc[filtered_indices]
       
+    dictResults = finalresults.to_dict('records')
+    resultRumahSakit = [item['nama_rumah_sakit'] for item in dictResults]
 
+    if(isEvaluating):
+        return resultRumahSakit
+    else:
+        return finalresults
+        
 
+def GetPrecision():
+    global tp
+    global fp
+    return (tp/(tp+fp))
 
+def GetRecall():
+    global tp
+    global fn
+    return (tp/(tp+fn))
 
-        return render_template('index.html', results=results.to_dict('records'), query=original_query, corrected_query=corrected_query)
-    return render_template('index.html', results=None)
 
 if __name__ == '__main__':
     app.run(debug=True)
