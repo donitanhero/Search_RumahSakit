@@ -191,14 +191,15 @@ def search():
         Evaluation(item, test_data[item], GetResults(item, True))
     precision = GetPrecision()
     recall = GetRecall()
+    f1score = GetF1Score()
 
     if request.method == 'POST' and not df.empty:
         original_query = request.form['query']
         corrected_query = correct_typos(original_query, allowed_keywords)  # Koreksi typo
         results = GetResults(corrected_query, False);
 
-        return render_template('index.html', results=results.to_dict('records'), query=original_query, corrected_query=corrected_query, precision = precision, recall = recall)
-    return render_template('index.html', results=None, precision = precision, recall = recall)
+        return render_template('index.html', results=results.to_dict('records'), query=original_query, corrected_query=corrected_query, precision = precision, recall = recall, f1score = f1score)
+    return render_template('index.html', results=None, precision = precision, recall = recall, f1score = f1score)
 
 def GetResults(corrected_query, isEvaluating):
     kota_tokens = kota_tokenizer.tokenize(corrected_query.split())  # Gunakan query yang sudah dikoreksi
@@ -238,6 +239,11 @@ def GetRecall():
     global tp
     global fn
     return (tp/(tp+fn))
+
+def GetF1Score():
+    precision = GetPrecision()
+    recall = GetRecall()
+    return 2*precision*recall / (precision+recall)
 
 
 if __name__ == '__main__':

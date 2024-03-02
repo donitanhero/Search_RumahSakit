@@ -9,8 +9,8 @@
         <input type="text" name="query" placeholder="Cari rumah sakit..." value="{{ query }}">
         <button type="submit">Cari</button>
     </form>
-    {{corrected_query}}
-    Precision: {{precision}}, Recall: {{recall}}
+    {{corrected_query}} <br>
+    Precision: {{precision}}, Recall: {{recall}}, F1 Score: {{f1score}}<br>
     {% if results %}
         <h2>Hasil:</h2>
         <ul>
